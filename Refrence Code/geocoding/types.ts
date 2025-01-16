@@ -1,4 +1,4 @@
-import type { GeocodingResponse } from '../../types/GeocodingTypes';
+import type { GeocodingResponse } from '../../../website/src/lib/types/GeocodingTypes';
 
 export interface GeocodingResult {
   coordinates: [number, number];

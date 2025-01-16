@@ -23,6 +23,8 @@ import {
 } from '$lib/components/file-list/FileList';
 import type { RoutingControls } from '$lib/components/toolbar/tools/routing/RoutingControls';
 import { SplitType } from '$lib/components/toolbar/tools/scissors/Scissors.svelte';
+import { processCSVFile } from '$lib/services/csv/index';
+import type { CSVWaypoint, CSVProcessingResult } from '$lib/services/csv/types';
 
 const { fileOrder } = settings;
 
@@ -240,7 +242,7 @@ export function createFile() {
 export function triggerFileInput() {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.gpx';
+    input.accept = '.gpx,.csv';
     input.multiple = true;
     input.className = 'hidden';
     input.onchange = () => {
@@ -269,23 +271,69 @@ export async function loadFiles(list: FileList | File[]) {
 export async function loadFile(file: File): Promise<GPXFile | null> {
     let result = await new Promise<GPXFile | null>((resolve) => {
         const reader = new FileReader();
-        reader.onload = () => {
+        reader.onload = async () => {
             let data = reader.result?.toString() ?? null;
-            if (data) {
-                let gpx = parseGPX(data);
-                if (gpx.metadata === undefined) {
-                    gpx.metadata = {};
+            if (!data) {
+                resolve(null);
+                return;
+            }
+
+            try {
+                // Handle different file types based on extension
+                const fileExtension = file.name.split('.').pop()?.toLowerCase();
+                
+                if (fileExtension === 'gpx') {
+                    let gpx = parseGPX(data);
+                    if (gpx.metadata === undefined) {
+                        gpx.metadata = {};
+                    }
+                    if (gpx.metadata.name === undefined || gpx.metadata.name.trim() === '') {
+                        gpx.metadata.name = file.name.split('.').slice(0, -1).join('.');
+                    }
+                    resolve(gpx);
+                } else if (fileExtension === 'csv') {
+                    // Process CSV file and convert to GPX
+                    const csvResult = await processCSVFile(data);
+                    console.log('CSV Processing Result:', csvResult);
+                    const gpx = new GPXFile({
+                        metadata: {
+                            name: file.name.split('.').slice(0, -1).join('.'),
+                            desc: 'Imported from CSV'
+                        },
+                        attributes: {
+                            version: "1.1",
+                            creator: "gpx.studio"
+                        },
+                        wpt: csvResult.waypoints.map((wp: CSVWaypoint) => {
+                            const waypoint = {
+                                attributes: {
+                                    lat: wp.latitude,
+                                    lon: wp.longitude
+                                },
+                                name: wp.address || `${wp.latitude},${wp.longitude}`,
+                                desc: wp.notes,
+                                time: wp.timestamp
+                            };
+                            console.log('Created Waypoint:', waypoint);
+                            return waypoint;
+                        }),
+                        trk: [],
+                        rte: []
+                    });
+                    console.log('Created GPX File:', gpx);
+                    resolve(gpx);
+                } else {
+                    resolve(null);
                 }
-                if (gpx.metadata.name === undefined || gpx.metadata.name.trim() === '') {
-                    gpx.metadata.name = file.name.split('.').slice(0, -1).join('.');
-                }
-                resolve(gpx);
-            } else {
+            } catch (error) {
+                console.error('Error loading file:', error);
                 resolve(null);
             }
         };
+        reader.onerror = () => resolve(null);
         reader.readAsText(file);
     });
+
     return result;
 }
 
