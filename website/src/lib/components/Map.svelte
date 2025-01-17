@@ -13,6 +13,7 @@
 	import { _ } from 'svelte-i18n';
 	import { PUBLIC_MAPBOX_TOKEN } from '$env/static/public';
 	import { page } from '$app/stores';
+	import type { Map as MapboxMap } from 'mapbox-gl';
 
 	export let accessToken = PUBLIC_MAPBOX_TOKEN;
 	export let geolocate = true;
@@ -198,7 +199,9 @@
 </script>
 
 <div {...$$restProps}>
-	<div id="map" class="h-full {webgl2Supported ? '' : 'hidden'}"></div>
+	<div id="map" class="h-full {webgl2Supported ? '' : 'hidden'}">
+		<!-- VehicleLayer removed -->
+	</div>
 	<div
 		class="flex flex-col items-center justify-center gap-3 h-full {webgl2Supported ? 'hidden' : ''}"
 	>

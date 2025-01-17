@@ -18,6 +18,7 @@
 	import { getURLForLanguage } from '$lib/utils';
 	import { getURLForGoogleDriveFile } from '$lib/components/embedding/Embedding';
 	import { _ } from 'svelte-i18n';
+	import { Play, ChevronDown } from 'lucide-svelte';
 
 	const {
 		treeFileView,
@@ -107,8 +108,48 @@
 			{/if}
 		</div>
 		{#if $elevationProfile}
-			<Resizer orientation="row" bind:after={$bottomPanelSize} minAfter={100} maxAfter={300} />
+			<!-- <Resizer orientation="row" bind:after={$bottomPanelSize} minAfter={100} maxAfter={300} /> -->
 		{/if}
+		<div
+			class="absolute bottom-0 left-0 right-0 bg-black/80 backdrop-blur-sm z-40"
+		>
+			<div class="max-w-6xl mx-auto p-2">
+				<!-- Controls Row -->
+				<div class="flex items-center gap-2">
+					<!-- Left side: Play controls and speed -->
+					<div class="flex items-center gap-2">
+						<!-- Play/Pause Button -->
+						<button
+							class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20
+									flex items-center justify-center transition-colors"
+							aria-label="Play"
+						>
+							<Play class="w-4 h-4 text-white translate-x-0.5" />
+						</button>
+
+						<!-- Speed Dropdown -->
+						<div class="relative">
+							<select
+								class="h-8 appearance-none bg-white/10 hover:bg-white/20 rounded px-2 pr-8 text-sm text-white
+										focus:outline-none focus:ring-1 focus:ring-white/30"
+							>
+								<option value="1">1x</option>
+								<option value="2">2x</option>
+								<option value="4">4x</option>
+								<option value="8">8x</option>
+							</select>
+							<ChevronDown class="w-4 h-4 text-white/70 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+						</div>
+
+						<!-- Current Time -->
+						<div class="text-white/70 text-sm">
+							00:00:00
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<!-- Commented out elevation components
 		<div
 			class="{$elevationProfile ? '' : 'h-10'} flex flex-row gap-2 px-2 sm:px-4"
 			style={$elevationProfile ? `height: ${$bottomPanelSize}px` : ''}
@@ -128,6 +169,7 @@
 				/>
 			{/if}
 		</div>
+		-->
 	</div>
 	{#if $treeFileView}
 		<Resizer orientation="col" bind:after={$rightPanelSize} minAfter={100} maxAfter={400} />
