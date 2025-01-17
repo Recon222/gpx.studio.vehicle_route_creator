@@ -14,7 +14,7 @@ export default defineConfig({
             '/routing': {
                 target: 'https://routing.gpx.studio',
                 changeOrigin: true,
-                rewrite: (path) => path.replace(/^\/routing/, '')
+                rewrite: (path) => path
             }
         }
     }
