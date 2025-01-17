@@ -294,24 +294,24 @@ export class RoutingControls {
         return false;
     }
 
-    async moveAnchor(anchorWithMarker: AnchorWithMarker) { // Move the anchor and update the route from and to the neighbouring anchors
+    async moveAnchor(anchorWithMarker: AnchorWithMarker) {
         let coordinates = {
             lat: anchorWithMarker.marker.getLngLat().lat,
             lon: anchorWithMarker.marker.getLngLat().lng
         };
 
         let anchor = anchorWithMarker as Anchor;
-        if (anchorWithMarker === this.temporaryAnchor) { // Temporary anchor, need to find the closest point of the segment and create an anchor for it
+        if (anchorWithMarker === this.temporaryAnchor) {
             this.temporaryAnchor.marker.remove();
             anchor = this.getPermanentAnchor();
         }
 
-        let [previousAnchor, nextAnchor] = this.getNeighbouringAnchors(anchor);
+        const [previousAnchor, nextAnchor] = this.getNeighbouringAnchors(anchor);
 
         let anchors = [];
         let targetCoordinates = [];
 
-        if (previousAnchor !== null) {
+        if (previousAnchor) {
             anchors.push(previousAnchor);
             targetCoordinates.push(previousAnchor.point.getCoordinates());
         }
@@ -319,14 +319,14 @@ export class RoutingControls {
         anchors.push(anchor);
         targetCoordinates.push(coordinates);
 
-        if (nextAnchor !== null) {
+        if (nextAnchor) {
             anchors.push(nextAnchor);
             targetCoordinates.push(nextAnchor.point.getCoordinates());
         }
 
         let success = await this.routeBetweenAnchors(anchors, targetCoordinates);
 
-        if (!success) { // Route failed, revert the anchor to the previous position
+        if (!success) {
             anchorWithMarker.marker.setLngLat(anchorWithMarker.point.getCoordinates());
         }
     }
@@ -547,10 +547,23 @@ export class RoutingControls {
             return false;
         }
 
-        if (anchors.length === 1) { // Only one anchor, update the point in the segment
-            dbUtils.applyToFile(this.fileId, (file) => file.replaceTrackPoints(anchors[0].trackIndex, anchors[0].segmentIndex, 0, 0, [new TrackPoint({
+        if (anchors.length === 1) {
+            // Only one anchor, preserve its timestamp and notes if they exist
+            const newPoint = new TrackPoint({
                 attributes: targetCoordinates[0],
-            })]));
+            });
+            if (anchors[0].point.time) {
+                newPoint.time = anchors[0].point.time;
+            }
+            if (anchors[0].point._data?.notes) {
+                newPoint._data = {
+                    ...newPoint._data,
+                    notes: anchors[0].point._data.notes
+                };
+            }
+            dbUtils.applyToFile(this.fileId, (file) => 
+                file.replaceTrackPoints(anchors[0].trackIndex, anchors[0].segmentIndex, 0, 0, [newPoint])
+            );
             return true;
         }
 
@@ -572,66 +585,176 @@ export class RoutingControls {
             return false;
         }
 
-        if (anchors[0].point._data.index === 0) { // First anchor is the first point of the segment
-            anchors[0].point = response[0]; // replace the first anchor
+        // Handle first anchor point
+        if (anchors[0].point._data.index === 0) {
+            anchors[0].point = response[0];
             anchors[0].point._data.index = 0;
-        } else if (anchors[0].point._data.index === segment.trkpt.length - 1 && distance(anchors[0].point.getCoordinates(), response[0].getCoordinates()) < 1) { // First anchor is the last point of the segment, and the new point is close enough
-            anchors[0].point = response[0]; // replace the first anchor
+            // Preserve timestamp and notes
+            if (anchors[0].point.time) {
+                response[0].time = anchors[0].point.time;
+            }
+            if (anchors[0].point._data?.notes) {
+                response[0]._data = {
+                    ...response[0]._data,
+                    notes: anchors[0].point._data.notes
+                };
+            }
+        } else if (anchors[0].point._data.index === segment.trkpt.length - 1 && 
+                   distance(anchors[0].point.getCoordinates(), response[0].getCoordinates()) < 1) {
+            anchors[0].point = response[0];
             anchors[0].point._data.index = segment.trkpt.length - 1;
+            // Preserve timestamp and notes
+            if (anchors[0].point.time) {
+                response[0].time = anchors[0].point.time;
+            }
+            if (anchors[0].point._data?.notes) {
+                response[0]._data = {
+                    ...response[0]._data,
+                    notes: anchors[0].point._data.notes
+                };
+            }
         } else {
-            anchors[0].point = anchors[0].point.clone(); // Clone the anchor to assign new properties
-            response.splice(0, 0, anchors[0].point); // Insert it in the response to keep it
+            anchors[0].point = anchors[0].point.clone();
+            response.splice(0, 0, anchors[0].point);
         }
 
-        if (anchors[anchors.length - 1].point._data.index === segment.trkpt.length - 1) { // Last anchor is the last point of the segment
-            anchors[anchors.length - 1].point = response[response.length - 1]; // replace the last anchor
+        // Handle last anchor point
+        if (anchors[anchors.length - 1].point._data.index === segment.trkpt.length - 1) {
+            anchors[anchors.length - 1].point = response[response.length - 1];
             anchors[anchors.length - 1].point._data.index = segment.trkpt.length - 1;
+            // Preserve timestamp and notes
+            const lastAnchor = anchors[anchors.length - 1];
+            if (lastAnchor.point.time) {
+                response[response.length - 1].time = lastAnchor.point.time;
+            }
+            if (lastAnchor.point._data?.notes) {
+                response[response.length - 1]._data = {
+                    ...response[response.length - 1]._data,
+                    notes: lastAnchor.point._data.notes
+                };
+            }
         } else {
-            anchors[anchors.length - 1].point = anchors[anchors.length - 1].point.clone(); // Clone the anchor to assign new properties
-            response.push(anchors[anchors.length - 1].point); // Insert it in the response to keep it
+            anchors[anchors.length - 1].point = anchors[anchors.length - 1].point.clone();
+            response.push(anchors[anchors.length - 1].point);
         }
 
+        // Handle intermediate anchors
         for (let i = 1; i < anchors.length - 1; i++) {
-            // Find the closest point to the intermediate anchor
-            // and transfer the marker to that point
-            anchors[i].point = getClosestLinePoint(response.slice(1, - 1), targetCoordinates[i]);
+            const closestPoint = getClosestLinePoint(response.slice(1, -1), targetCoordinates[i]);
+            if (closestPoint) {
+                anchors[i].point = closestPoint;
+                // Preserve timestamp and notes for intermediate anchors
+                if (anchors[i].point.time) {
+                    closestPoint.time = anchors[i].point.time;
+                }
+                if (anchors[i].point._data?.notes) {
+                    closestPoint._data = {
+                        ...closestPoint._data,
+                        notes: anchors[i].point._data.notes
+                    };
+                }
+            }
         }
 
+        // Set anchor properties
         anchors.forEach((anchor) => {
-            anchor.point._data.anchor = true;
-            anchor.point._data.zoom = 0; // Make these anchors permanent
+            if (anchor.point._data) {
+                anchor.point._data.anchor = true;
+                anchor.point._data.zoom = 0;
+            }
         });
 
-        let stats = fileWithStats.statistics.getStatisticsFor(new ListTrackSegmentItem(this.fileId, anchors[0].trackIndex, anchors[0].segmentIndex));
-        let speed: number | undefined = undefined;
-        let startTime = anchors[0].point.time;
-
-        if (stats.global.speed.moving > 0) {
-            let replacingDistance = 0;
-            for (let i = 1; i < response.length; i++) {
-                replacingDistance += distance(response[i - 1].getCoordinates(), response[i].getCoordinates()) / 1000;
-            }
-            let replacedDistance = stats.local.distance.moving[anchors[anchors.length - 1].point._data.index] - stats.local.distance.moving[anchors[0].point._data.index];
-
-            let newDistance = stats.global.distance.moving + replacingDistance - replacedDistance;
-            let newTime = newDistance / stats.global.speed.moving * 3600;
-
-            let remainingTime = stats.global.time.moving - (stats.local.time.moving[anchors[anchors.length - 1].point._data.index] - stats.local.time.moving[anchors[0].point._data.index]);
-            let replacingTime = newTime - remainingTime;
-
-            if (replacingTime <= 0) { // Fallback to simple time difference
-                replacingTime = stats.local.time.total[anchors[anchors.length - 1].point._data.index] - stats.local.time.total[anchors[0].point._data.index];
-            }
-
-            speed = replacingDistance / replacingTime * 3600;
-
-            if (startTime === undefined) { // Replacing the first point
-                let endIndex = anchors[anchors.length - 1].point._data.index;
-                startTime = new Date((segment.trkpt[endIndex].time?.getTime() ?? 0) - (replacingTime + stats.local.time.total[endIndex] - stats.local.time.moving[endIndex]) * 1000);
+        // Check if we should use anchor timestamps
+        let useAnchorTimestamps = false;
+        const firstPoint = anchors[0]?.point;
+        const lastPoint = anchors[anchors.length - 1]?.point;
+        
+        if (firstPoint?.time !== undefined && lastPoint?.time !== undefined) {
+            useAnchorTimestamps = true;
+            // Verify all intermediate anchors with timestamps are in chronological order
+            for (let i = 1; i < anchors.length - 1; i++) {
+                const currentPoint = anchors[i]?.point;
+                if (currentPoint?.time !== undefined) {
+                    const prevTime = anchors[i - 1]?.point?.time;
+                    const nextTime = anchors[i + 1]?.point?.time;
+                    if (prevTime && nextTime && (
+                        currentPoint.time < prevTime || 
+                        currentPoint.time > nextTime
+                    )) {
+                        useAnchorTimestamps = false;
+                        break;
+                    }
+                }
             }
         }
 
-        dbUtils.applyToFile(this.fileId, (file) => file.replaceTrackPoints(anchors[0].trackIndex, anchors[0].segmentIndex, anchors[0].point._data.index, anchors[anchors.length - 1].point._data.index, response, speed, startTime));
+        let speed: number | undefined = undefined;
+        let startTime = firstPoint?.time;
+
+        if (!useAnchorTimestamps) {
+            // Use original speed-based timing logic
+            let stats = fileWithStats.statistics.getStatisticsFor(
+                new ListTrackSegmentItem(this.fileId, anchors[0].trackIndex, anchors[0].segmentIndex)
+            );
+
+            if (stats.global.speed.moving > 0) {
+                let replacingDistance = 0;
+                for (let i = 1; i < response.length; i++) {
+                    replacingDistance += distance(response[i - 1].getCoordinates(), response[i].getCoordinates()) / 1000;
+                }
+
+                const startIndex = firstPoint?._data?.index;
+                const endIndex = lastPoint?._data?.index;
+                
+                if (typeof startIndex === 'number' && 
+                    typeof endIndex === 'number' && 
+                    stats.local.distance.moving[startIndex] !== undefined && 
+                    stats.local.distance.moving[endIndex] !== undefined &&
+                    stats.local.time.moving[startIndex] !== undefined &&
+                    stats.local.time.moving[endIndex] !== undefined &&
+                    stats.local.time.total[startIndex] !== undefined &&
+                    stats.local.time.total[endIndex] !== undefined) {
+                    
+                    let replacedDistance = stats.local.distance.moving[endIndex] - 
+                                         stats.local.distance.moving[startIndex];
+
+                    let newDistance = stats.global.distance.moving + replacingDistance - replacedDistance;
+                    let newTime = newDistance / stats.global.speed.moving * 3600;
+
+                    let remainingTime = stats.global.time.moving - 
+                                      (stats.local.time.moving[endIndex] - 
+                                       stats.local.time.moving[startIndex]);
+                    let replacingTime = newTime - remainingTime;
+
+                    if (replacingTime <= 0) {
+                        replacingTime = stats.local.time.total[endIndex] - 
+                                      stats.local.time.total[startIndex];
+                    }
+
+                    speed = replacingDistance / replacingTime * 3600;
+
+                    if (startTime === undefined && segment.trkpt[endIndex]?.time) {
+                        const endTime = segment.trkpt[endIndex].time.getTime();
+                        startTime = new Date(endTime - 
+                                       (replacingTime + stats.local.time.total[endIndex] - 
+                                        stats.local.time.moving[endIndex]) * 1000);
+                    }
+                }
+            }
+        }
+
+        // Apply the changes to the file
+        dbUtils.applyToFile(this.fileId, (file) => 
+            file.replaceTrackPoints(
+                anchors[0].trackIndex,
+                anchors[0].segmentIndex,
+                firstPoint?._data?.index ?? 0,
+                lastPoint?._data?.index ?? 0,
+                response,
+                useAnchorTimestamps ? undefined : speed,
+                useAnchorTimestamps ? undefined : startTime
+            )
+        );
 
         return true;
     }
