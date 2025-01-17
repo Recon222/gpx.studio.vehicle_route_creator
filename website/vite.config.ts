@@ -8,5 +8,14 @@ export default defineConfig({
         globals: {
             Buffer: true,
         },
-    }), enhancedImages(), sveltekit()]
+    }), enhancedImages(), sveltekit()],
+    server: {
+        proxy: {
+            '/routing': {
+                target: 'https://routing.gpx.studio',
+                changeOrigin: true,
+                rewrite: (path) => path.replace(/^\/routing/, '')
+            }
+        }
+    }
 });

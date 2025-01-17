@@ -23,9 +23,12 @@ export const routingProfileSelectItem = writable({
 });
 
 derived([routingProfile, locale, isLoading], ([profile, l, i]) => [profile, l, i]).subscribe(([profile, l, i]) => {
-    if (!i && profile !== '' && (profile !== get(routingProfileSelectItem).value || get(_)(`toolbar.routing.activities.${profile}`) !== get(routingProfileSelectItem).label) && l !== null) {
+    if (!i && profile !== '' && profile !== undefined && profile !== null && 
+        (profile !== get(routingProfileSelectItem).value || 
+        get(_)(`toolbar.routing.activities.${profile}`) !== get(routingProfileSelectItem).label) && 
+        l !== null) {
         routingProfileSelectItem.update((item) => {
-            item.value = profile;
+            item.value = profile as string;
             item.label = get(_)(`toolbar.routing.activities.${profile}`);
             return item;
         });
@@ -46,7 +49,7 @@ export function route(points: Coordinates[]): Promise<TrackPoint[]> {
 }
 
 async function getRoute(points: Coordinates[], brouterProfile: string, privateRoads: boolean): Promise<TrackPoint[]> {
-    let url = `https://routing.gpx.studio?lonlats=${points.map(point => `${point.lon.toFixed(8)},${point.lat.toFixed(8)}`).join('|')}&profile=${brouterProfile + (privateRoads ? '-private' : '')}&format=geojson&alternativeidx=0`;
+    let url = `/routing?lonlats=${points.map(point => `${point.lon.toFixed(8)},${point.lat.toFixed(8)}`).join('|')}&profile=${brouterProfile + (privateRoads ? '-private' : '')}&format=geojson&alternativeidx=0`;
 
     let response = await fetch(url);
 
