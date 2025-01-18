@@ -118,6 +118,11 @@
 
 	function updateOverlays() {
 		if (!$map || !$currentOverlays || !$opacities) return;
+		if (!$map.isStyleLoaded()) {
+			// Try again when style is loaded
+			$map.once('style.load', updateOverlays);
+			return;
+		}
 
 		let overlayLayers = getLayers($currentOverlays);
 		try {
