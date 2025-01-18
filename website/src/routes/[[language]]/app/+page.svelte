@@ -19,6 +19,9 @@
 	import { getURLForGoogleDriveFile } from '$lib/components/embedding/Embedding';
 	import { _ } from 'svelte-i18n';
 	import { Play, ChevronDown } from 'lucide-svelte';
+	import { anchorTimingStore } from '$lib/stores/anchor-timing';
+	import AnchorTimestampPicker from '$lib/components/anchor-timing/AnchorTimestampPicker.svelte';
+	import { toast } from 'svelte-sonner';
 
 	const {
 		treeFileView,
@@ -28,6 +31,40 @@
 		additionalDatasets,
 		elevationFill
 	} = settings;
+
+	let activeAnchorId: string | null = null;
+
+	// Subscribe to the active anchor ID
+	$: {
+		if ($anchorTimingStore.activeAnchorId !== activeAnchorId) {
+			activeAnchorId = $anchorTimingStore.activeAnchorId;
+			console.log('[DEBUG] Active anchor changed in app:', activeAnchorId);
+		}
+	}
+
+	function handleSaveTimestamp(data: { timestamp: Date; notes: string }) {
+		console.log('[DEBUG] Saving timestamp in app:', data);
+		if (activeAnchorId) {
+			const timing = $anchorTimingStore.timings.get(activeAnchorId);
+			if (timing?.coordinates) {
+				anchorTimingStore.setTiming(activeAnchorId, {
+					coordinates: timing.coordinates,
+					timestamp: data.timestamp,
+					notes: data.notes
+				});
+				toast.success('Timestamp saved');
+				anchorTimingStore.setActiveAnchor(null); // Close the picker after saving
+			} else {
+				console.error('[DEBUG] Missing coordinates for anchor:', activeAnchorId);
+				toast.error('Error saving timestamp: Missing coordinates');
+			}
+		}
+	}
+
+	function handleCancelTimestamp() {
+		console.log('[DEBUG] Cancelling timestamp edit');
+		anchorTimingStore.setActiveAnchor(null);
+	}
 
 	onMount(() => {
 		let files: string[] = JSON.parse($page.url.searchParams.get('files') || '[]');
@@ -101,8 +138,27 @@
 			<LayerControl />
 			<GPXLayers />
 			<Toaster richColors />
+			
+			{#if activeAnchorId}
+				{@const timing = $anchorTimingStore.timings.get(activeAnchorId)}
+				{@const debug = console.log('[DEBUG] Attempting to render timestamp picker:', {
+					activeAnchorId,
+					timing,
+					storeState: $anchorTimingStore
+				})}
+				<div class="absolute top-4 right-4 z-50 bg-red-500/50 p-2">
+					<div class="text-white text-xs mb-2">Debug: Timestamp Picker Container</div>
+					<AnchorTimestampPicker
+						timestamp={timing?.timestamp}
+						notes={timing?.notes ?? ''}
+						onSave={handleSaveTimestamp}
+						onCancel={handleCancelTimestamp}
+					/>
+				</div>
+			{/if}
+
 			{#if !$treeFileView}
-				<div class="h-10 -translate-y-10 w-full pointer-events-none absolute z-30">
+				<div class="absolute bottom-[52px] left-0 right-0 h-10 w-full z-50 pointer-events-auto">
 					<FileList orientation="horizontal" />
 				</div>
 			{/if}

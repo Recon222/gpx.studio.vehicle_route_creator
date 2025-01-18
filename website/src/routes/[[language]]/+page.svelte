@@ -22,6 +22,9 @@
 	import Toolbar from '$lib/components/toolbar/Toolbar.svelte';
 	import { currentTool, Tool } from '$lib/stores';
 	import { onDestroy, onMount } from 'svelte';
+	import { anchorTimingStore } from '$lib/stores/anchor-timing';
+	import AnchorTimestampPicker from '$lib/components/anchor-timing/AnchorTimestampPicker.svelte';
+	import { toast } from 'svelte-sonner';
 
 	export let data: {
 		fundingModule: any;
@@ -33,6 +36,7 @@
 	let slicedGPXStatistics = writable(undefined);
 	let additionalDatasets = writable(['speed', 'atemp']);
 	let elevationFill = writable<'slope' | 'surface' | undefined>(undefined);
+	let activeAnchorId: string | null = null;
 
 	onMount(() => {
 		$currentTool = Tool.SCISSORS;
@@ -43,6 +47,36 @@
 	onDestroy(() => {
 		$currentTool = null;
 	});
+
+	// Subscribe to the active anchor ID
+	$: {
+		if ($anchorTimingStore.activeAnchorId !== activeAnchorId) {
+			activeAnchorId = $anchorTimingStore.activeAnchorId;
+			console.log('[DEBUG] Active anchor changed:', activeAnchorId);
+		}
+	}
+
+	function handleSaveTimestamp(data: { timestamp: Date; notes: string }) {
+		console.log('[DEBUG] Saving timestamp:', data);
+		if (activeAnchorId) {
+			const timing = $anchorTimingStore.timings.get(activeAnchorId);
+			if (timing) {
+				anchorTimingStore.setTiming(activeAnchorId, {
+					...timing,
+					timestamp: data.timestamp,
+					notes: data.notes
+				});
+				toast.success('Timestamp saved');
+			}
+		}
+	}
+
+	function handleCancelTimestamp() {
+		console.log('[DEBUG] Cancelling timestamp edit');
+		if (activeAnchorId) {
+			anchorTimingStore.setActiveAnchor(null);
+		}
+	}
 </script>
 
 <div class="space-y-24 my-24">

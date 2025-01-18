@@ -9,6 +9,8 @@ import { getOrderedSelection, selection } from "$lib/components/file-list/Select
 import { ListFileItem, ListTrackItem, ListTrackSegmentItem } from "$lib/components/file-list/FileList";
 import { currentTool, streetViewEnabled, Tool } from "$lib/stores";
 import { getClosestLinePoint, resetCursor, setGrabbingCursor } from "$lib/utils";
+import { anchorTimingStore } from '$lib/stores/anchor-timing';
+import { v4 as uuidv4 } from 'uuid';
 
 const { streetViewSource } = settings;
 export const canChangeStart = writable(false);
@@ -182,23 +184,56 @@ export class RoutingControls {
 
     handleClickForAnchor(anchor: Anchor, marker: mapboxgl.Marker) {
         return (e: any) => {
+            console.log('[DEBUG] Anchor clicked:', anchor);
             e.preventDefault();
             e.stopPropagation();
 
-            if (Date.now() - this.lastDragEvent < 100) { // Prevent click event during drag
+            if (Date.now() - this.lastDragEvent < 100) {
+                console.log('[DEBUG] Ignoring click due to recent drag');
                 return;
             }
 
             if (marker === this.temporaryAnchor.marker) {
+                console.log('[DEBUG] Clicked temporary anchor, converting to permanent');
                 this.turnIntoPermanentAnchor();
                 return;
             }
 
             if (e.shiftKey) {
+                console.log('[DEBUG] Shift-click detected, deleting anchor');
                 this.deleteAnchor(anchor);
                 return;
             }
 
+            // If the anchor has an ID, activate it in the timing store
+            if (anchor.point._data?.id) {
+                console.log('[DEBUG] Setting active anchor for timestamp editing:', anchor.point._data.id);
+                anchorTimingStore.setActiveAnchor(anchor.point._data.id);
+                return;
+            }
+
+            // If no ID, generate one and set up timing
+            const anchorId = uuidv4();
+            console.log('[DEBUG] Generated new anchorId for existing anchor:', anchorId);
+            
+            anchor.point._data = {
+                ...anchor.point._data,
+                id: anchorId
+            };
+
+            // Set initial timing data with coordinates
+            const coordinates = anchor.point.getCoordinates();
+            anchorTimingStore.setTiming(anchorId, {
+                coordinates: {
+                    lat: coordinates.lat,
+                    lon: coordinates.lon
+                }
+            });
+            
+            // Activate the timestamp picker
+            anchorTimingStore.setActiveAnchor(anchorId);
+
+            // Only show the loop popup if not editing timestamp
             canChangeStart.update(() => {
                 if (anchor.point._data.index === 0) {
                     return false;
@@ -214,9 +249,9 @@ export class RoutingControls {
             marker.togglePopup();
 
             let deleteThisAnchor = this.getDeleteAnchor(anchor);
-            this.popupElement.addEventListener('delete', deleteThisAnchor); // Register the delete event for this anchor
+            this.popupElement.addEventListener('delete', deleteThisAnchor);
             let startLoopAtThisAnchor = this.getStartLoopAtAnchor(anchor);
-            this.popupElement.addEventListener('change-start', startLoopAtThisAnchor); // Register the start loop event for this anchor
+            this.popupElement.addEventListener('change-start', startLoopAtThisAnchor);
             this.popup.once('close', () => {
                 this.popupElement.removeEventListener('delete', deleteThisAnchor);
                 this.popupElement.removeEventListener('change-start', startLoopAtThisAnchor);
@@ -295,6 +330,7 @@ export class RoutingControls {
     }
 
     async moveAnchor(anchorWithMarker: AnchorWithMarker) {
+        console.log('[DEBUG] moveAnchor called with:', anchorWithMarker);
         let coordinates = {
             lat: anchorWithMarker.marker.getLngLat().lat,
             lon: anchorWithMarker.marker.getLngLat().lng
@@ -302,18 +338,46 @@ export class RoutingControls {
 
         let anchor = anchorWithMarker as Anchor;
         if (anchorWithMarker === this.temporaryAnchor) {
+            console.log('[DEBUG] Converting temporary anchor to permanent');
             this.temporaryAnchor.marker.remove();
             anchor = this.getPermanentAnchor();
+            
+            // When creating a new permanent anchor, prompt for timestamp
+            const anchorId = uuidv4();
+            console.log('[DEBUG] Generated new anchorId:', anchorId);
+            
+            if (anchor?.point?._data) {
+                console.log('[DEBUG] Setting anchor data and activating timestamp picker');
+                anchor.point._data.id = anchorId;
+                anchor.point._data.anchor = true;
+                
+                // Set initial timing data with coordinates
+                anchorTimingStore.setTiming(anchorId, {
+                    coordinates: {
+                        lat: coordinates.lat,
+                        lon: coordinates.lon
+                    }
+                });
+                
+                // Activate the timestamp picker
+                anchorTimingStore.setActiveAnchor(anchorId);
+                console.log('[DEBUG] Current anchor timing store state:', get(anchorTimingStore));
+            } else {
+                console.warn('[DEBUG] No _data object on anchor point');
+            }
         }
 
         const [previousAnchor, nextAnchor] = this.getNeighbouringAnchors(anchor);
 
-        let anchors = [];
-        let targetCoordinates = [];
+        let anchors: Anchor[] = [];
+        let targetCoordinates: Coordinates[] = [];
 
         if (previousAnchor) {
             anchors.push(previousAnchor);
-            targetCoordinates.push(previousAnchor.point.getCoordinates());
+            const coords = previousAnchor.point?.getCoordinates();
+            if (coords) {
+                targetCoordinates.push(coords);
+            }
         }
 
         anchors.push(anchor);
@@ -321,13 +385,19 @@ export class RoutingControls {
 
         if (nextAnchor) {
             anchors.push(nextAnchor);
-            targetCoordinates.push(nextAnchor.point.getCoordinates());
+            const coords = nextAnchor.point?.getCoordinates();
+            if (coords) {
+                targetCoordinates.push(coords);
+            }
         }
 
         let success = await this.routeBetweenAnchors(anchors, targetCoordinates);
 
-        if (!success) {
-            anchorWithMarker.marker.setLngLat(anchorWithMarker.point.getCoordinates());
+        if (!success && anchorWithMarker?.point) {
+            const coords = anchorWithMarker.point.getCoordinates();
+            if (coords) {
+                anchorWithMarker.marker.setLngLat(coords);
+            }
         }
     }
 
@@ -366,7 +436,12 @@ export class RoutingControls {
     }
 
     turnIntoPermanentAnchor() {
-        let file = get(this.file)?.file;
+        console.log('[DEBUG] turnIntoPermanentAnchor called');
+        let file = get(this.file);
+        if (!file) {
+            console.warn('[DEBUG] No file available');
+            return;
+        }
 
         // Find the point closest to the temporary anchor
         let minDetails: any = { distance: Number.MAX_VALUE };
@@ -377,11 +452,13 @@ export class RoutingControls {
             trkptIndex: -1
         };
 
-        file?.forEachSegment((segment, trackIndex, segmentIndex) => {
+        file?.file.forEachSegment((segment, trackIndex, segmentIndex) => {
+            console.log(`[DEBUG] Processing segment ${trackIndex}:${segmentIndex}`);
             if (get(selection).hasAnyParent(new ListTrackSegmentItem(this.fileId, trackIndex, segmentIndex))) {
                 let details: any = {};
                 getClosestLinePoint(segment.trkpt, this.temporaryAnchor.point, details);
                 if (details.distance < minDetails.distance) {
+                    console.log('[DEBUG] Found closer point:', details);
                     minDetails = details;
                     let before = details.before ? details.index : details.index - 1;
 
@@ -408,7 +485,33 @@ export class RoutingControls {
         });
 
         if (minInfo.trackIndex !== -1) {
-            dbUtils.applyToFile(this.fileId, (file) => file.replaceTrackPoints(minInfo.trackIndex, minInfo.segmentIndex, minInfo.trkptIndex, minInfo.trkptIndex - 1, [minInfo.point]));
+            console.log('[DEBUG] Applying permanent anchor:', minInfo);
+            const anchorId = uuidv4();
+            console.log('[DEBUG] Generated anchorId for permanent anchor:', anchorId);
+            
+            minInfo.point._data = {
+                ...minInfo.point._data,
+                id: uuidv4()
+            };
+
+            // Set initial timing data with coordinates
+            const coordinates = minInfo.point.getCoordinates();
+            anchorTimingStore.setTiming(anchorId, {
+                coordinates: {
+                    lat: coordinates.lat,
+                    lon: coordinates.lon
+                }
+            });
+            
+            dbUtils.applyToFile(this.fileId, (file) => {
+                console.log('[DEBUG] Replacing track points with new anchor');
+                file.replaceTrackPoints(minInfo.trackIndex, minInfo.segmentIndex, minInfo.trkptIndex, minInfo.trkptIndex - 1, [minInfo.point]);
+            });
+            
+            console.log('[DEBUG] Setting active anchor in timing store');
+            anchorTimingStore.setActiveAnchor(anchorId);
+        } else {
+            console.warn('[DEBUG] No valid track index found for permanent anchor');
         }
     }
 
@@ -586,18 +689,29 @@ export class RoutingControls {
         }
 
         // Handle first anchor point
-        if (anchors[0].point._data.index === 0) {
+        if (anchors[0].point._data?.index === 0) {
             anchors[0].point = response[0];
+            anchors[0].point._data = anchors[0].point._data || {};
             anchors[0].point._data.index = 0;
+            
             // Preserve timestamp and notes
             if (anchors[0].point.time) {
                 response[0].time = anchors[0].point.time;
             }
             if (anchors[0].point._data?.notes) {
-                response[0]._data = {
-                    ...response[0]._data,
-                    notes: anchors[0].point._data.notes
-                };
+                response[0]._data = response[0]._data || {};
+                response[0]._data.notes = anchors[0].point._data.notes;
+            }
+            
+            // Update timing store if this is a new anchor
+            const anchorId = anchors[0].point._data?.id;
+            if (anchorId) {
+                const timing = anchorTimingStore.get(anchorId);
+                if (timing) {
+                    response[0].time = timing.timestamp;
+                    response[0]._data = response[0]._data || {};
+                    response[0]._data.notes = timing.notes;
+                }
             }
         } else if (anchors[0].point._data.index === segment.trkpt.length - 1 && 
                    distance(anchors[0].point.getCoordinates(), response[0].getCoordinates()) < 1) {
