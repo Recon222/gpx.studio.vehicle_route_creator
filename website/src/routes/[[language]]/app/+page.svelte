@@ -79,13 +79,16 @@
 				downloads.push(
 					fetch(url)
 						.then((response) => response.blob())
-						.then((blob) => new File([blob], url.split('/').pop()))
+						.then((blob) => {
+							const fileName = url.split('/').pop();
+							return fileName ? new File([blob], fileName) : null;
+						})
 				);
 			});
 
 			Promise.all(downloads).then((files) => {
-				files = files.filter((file) => file !== null);
-				loadFiles(files);
+				const validFiles = files.filter((file): file is File => file !== null);
+				loadFiles(validFiles);
 			});
 		}
 	});

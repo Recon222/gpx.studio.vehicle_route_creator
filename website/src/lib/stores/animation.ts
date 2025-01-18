@@ -2,10 +2,15 @@ import { writable, derived, type Writable } from 'svelte/store';
 import type { ProcessedData, AnimationState, InterpolatedPosition } from '$lib/types/gps';
 import * as turf from '@turf/turf';
 
+export interface TimeRange {
+  start: Date;
+  end: Date;
+}
+
 interface AnimationStore extends AnimationState {
   gpsData: ProcessedData | null;
   currentPosition: InterpolatedPosition | null;
-  timeFilter: { start: Date; end: Date } | null;
+  timeFilter: TimeRange | null;
 }
 
 function createAnimationStore() {
@@ -163,7 +168,7 @@ function createAnimationStore() {
       return { ...store, currentTime: time, currentPosition: newPosition };
     }),
     setPlaybackSpeed: (speed: number) => update(store => ({ ...store, playbackSpeed: speed })),
-    setTimeFilter: (filter: { start: Date; end: Date } | null) => update(store => ({ ...store, timeFilter: filter }))
+    setTimeFilter: (filter: TimeRange | null) => update(store => ({ ...store, timeFilter: filter }))
   };
 }
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { StyleSpecification, LayerSpecification } from 'mapbox-gl';
 	import CustomControl from '$lib/components/custom-control/CustomControl.svelte';
 	import LayerTree from './LayerTree.svelte';
 
@@ -31,9 +32,17 @@
 
 	function setStyle() {
 		if ($map) {
-			let basemap = basemaps.hasOwnProperty($currentBasemap)
+			const basemapValue = basemaps.hasOwnProperty($currentBasemap)
 				? basemaps[$currentBasemap]
 				: ($customLayers[$currentBasemap]?.value ?? basemaps[defaultBasemap]);
+			
+			const basemap = typeof basemapValue === 'string' ? basemapValue : {
+				version: 8,
+				sources: {},
+				layers: [],
+				...basemapValue
+			} satisfies StyleSpecification;
+
 			$map.removeImport('basemap');
 			if (typeof basemap === 'string') {
 				$map.addImport({ id: 'basemap', url: basemap }, 'overlays');
@@ -41,6 +50,7 @@
 				$map.addImport(
 					{
 						id: 'basemap',
+						url: '',
 						data: basemap
 					},
 					'overlays'
@@ -54,58 +64,86 @@
 	}
 
 	function addOverlay(id: string) {
+		if (!$map) return;
+		
 		try {
-			let overlay = $customLayers.hasOwnProperty(id) ? $customLayers[id].value : overlays[id];
+			const overlayValue = $customLayers.hasOwnProperty(id) 
+				? $customLayers[id].value 
+				: overlays[id];
+				
+			const overlay = typeof overlayValue === 'string' ? overlayValue : {
+				version: 8,
+				sources: {},
+				layers: [],
+				...overlayValue
+			} satisfies StyleSpecification;
+				
 			if (typeof overlay === 'string') {
 				$map.addImport({ id, url: overlay });
 			} else {
 				if ($opacities.hasOwnProperty(id)) {
-					overlay = {
-						...overlay,
-						layers: overlay.layers.map((layer) => {
-							if (layer.type === 'raster') {
-								if (!layer.paint) {
-									layer.paint = {};
+					const updatedLayers = (overlay.layers || []).map((layer: LayerSpecification) => {
+						if (layer.type === 'raster') {
+							return {
+								...layer,
+								paint: {
+									...layer.paint,
+									'raster-opacity': $opacities[id]
 								}
-								layer.paint['raster-opacity'] = $opacities[id];
-							}
-							return layer;
-						})
-					};
+							};
+						}
+						return layer;
+					});
+
+					$map.addImport({
+						id,
+						url: '',
+						data: {
+							...overlay,
+							layers: updatedLayers
+						}
+					});
+				} else {
+					$map.addImport({
+						id,
+						url: '',
+						data: overlay
+					});
 				}
-				$map.addImport({
-					id,
-					data: overlay
-				});
 			}
 		} catch (e) {
-			// No reliable way to check if the map is ready to add sources and layers
+			console.warn('Error adding overlay:', e);
 		}
 	}
 
 	function updateOverlays() {
-		if ($map && $currentOverlays && $opacities) {
-			let overlayLayers = getLayers($currentOverlays);
-			try {
-				let activeOverlays = $map.getStyle().imports.reduce((acc, i) => {
-					if (!['basemap', 'overlays', 'glyphs-and-sprite'].includes(i.id)) {
-						acc[i.id] = i;
-					}
-					return acc;
-				}, {});
-				let toRemove = Object.keys(activeOverlays).filter((id) => !overlayLayers[id]);
-				toRemove.forEach((id) => {
-					$map.removeImport(id);
-				});
-				let toAdd = Object.entries(overlayLayers)
-					.filter(([id, selected]) => selected && !activeOverlays.hasOwnProperty(id))
-					.map(([id]) => id);
-				toAdd.forEach((id) => {
-					addOverlay(id);
-				});
-			} catch (e) {
-				// No reliable way to check if the map is ready to add sources and layers
-			}
+		if (!$map || !$currentOverlays || !$opacities) return;
+
+		let overlayLayers = getLayers($currentOverlays);
+		try {
+			const style = $map.getStyle();
+			if (!style || !style.imports) return;
+
+			let activeOverlays = style.imports.reduce<Record<string, any>>((acc, i) => {
+				if (!['basemap', 'overlays', 'glyphs-and-sprite'].includes(i.id)) {
+					acc[i.id] = i;
+				}
+				return acc;
+			}, {});
+
+			let toRemove = Object.keys(activeOverlays).filter((id) => !overlayLayers[id]);
+			toRemove.forEach((id) => {
+				$map?.removeImport(id);
+			});
+
+			let toAdd = Object.entries(overlayLayers)
+				.filter(([id, selected]) => selected && !activeOverlays.hasOwnProperty(id))
+				.map(([id]) => id);
+			toAdd.forEach((id) => {
+				addOverlay(id);
+			});
+		} catch (e) {
+			console.warn('Error updating overlays:', e);
 		}
 	}
 
@@ -145,6 +183,14 @@
 		open = false;
 	}
 	let cancelEvents = false;
+
+	function handleWindowClick(e: Event) {
+		if (!open || cancelEvents || !container) return;
+		if (!(e.target instanceof Node)) return;
+		if (!container.contains(e.target)) {
+			closeLayerControl();
+		}
+	}
 </script>
 
 <CustomControl class="group min-w-[29px] min-h-[29px] overflow-hidden">
@@ -213,10 +259,4 @@
 	</div>
 </CustomControl>
 
-<svelte:window
-	on:click={(e) => {
-		if (open && !cancelEvents && !container.contains(e.target)) {
-			closeLayerControl();
-		}
-	}}
-/>
+<svelte:window on:click={handleWindowClick} />

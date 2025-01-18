@@ -468,7 +468,14 @@ export class RoutingControls {
                     let point = segment.trkpt[before].clone();
                     point.setCoordinates(projectedPt);
                     point.ele = (1 - ratio) * (segment.trkpt[before].ele ?? 0) + ratio * (segment.trkpt[before + 1].ele ?? 0);
-                    point.time = (segment.trkpt[before].time && segment.trkpt[before + 1].time) ? new Date((1 - ratio) * segment.trkpt[before].time.getTime() + ratio * segment.trkpt[before + 1].time.getTime()) : undefined;
+                    
+                    // Safely handle time interpolation
+                    const beforeTime = segment.trkpt[before]?.time;
+                    const afterTime = segment.trkpt[before + 1]?.time;
+                    point.time = beforeTime && afterTime 
+                        ? new Date((1 - ratio) * beforeTime.getTime() + ratio * afterTime.getTime())
+                        : undefined;
+                        
                     point._data = {
                         anchor: true,
                         zoom: 0
@@ -527,7 +534,11 @@ export class RoutingControls {
         if (previousAnchor === null && nextAnchor === null) { // Only one point, remove it
             dbUtils.applyToFile(this.fileId, (file) => file.replaceTrackPoints(anchor.trackIndex, anchor.segmentIndex, 0, 0, []));
         } else if (previousAnchor === null) { // First point, remove trackpoints until nextAnchor
-            dbUtils.applyToFile(this.fileId, (file) => file.replaceTrackPoints(anchor.trackIndex, anchor.segmentIndex, 0, nextAnchor.point._data.index - 1, []));
+            if (nextAnchor && nextAnchor.point._data) {
+                dbUtils.applyToFile(this.fileId, (file) => 
+                    file.replaceTrackPoints(anchor.trackIndex, anchor.segmentIndex, 0, nextAnchor.point._data.index - 1, [])
+                );
+            }
         } else if (nextAnchor === null) { // Last point, remove trackpoints from previousAnchor
             dbUtils.applyToFile(this.fileId, (file) => {
                 let segment = file.getSegment(anchor.trackIndex, anchor.segmentIndex);
@@ -707,10 +718,10 @@ export class RoutingControls {
             const anchorId = anchors[0].point._data?.id;
             if (anchorId) {
                 const timing = anchorTimingStore.get(anchorId);
-                if (timing) {
+                if (timing?.timestamp) {
                     response[0].time = timing.timestamp;
                     response[0]._data = response[0]._data || {};
-                    response[0]._data.notes = timing.notes;
+                    response[0]._data.notes = timing.notes || '';
                 }
             }
         } else if (anchors[0].point._data.index === segment.trkpt.length - 1 && 

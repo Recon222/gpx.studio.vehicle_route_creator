@@ -49,16 +49,38 @@
 
 	let container: HTMLDivElement;
 	let countKeyPress = 0;
-	function onKeyPress(e) {
+
+	function onKeyPress(e: KeyboardEvent) {
 		if (['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(e.key)) {
 			countKeyPress++;
 			if (countKeyPress === 2) {
-				if (e.target.id === 'hours') {
-					container.querySelector('#minutes')?.focus();
-				} else if (e.target.id === 'minutes') {
-					container.querySelector('#seconds')?.focus();
+				const target = e.target as HTMLInputElement;
+				if (target.id === 'hours') {
+					const minutesInput = container.querySelector('#minutes') as HTMLInputElement;
+					minutesInput?.focus();
+				} else if (target.id === 'minutes') {
+					const secondsInput = container.querySelector('#seconds') as HTMLInputElement;
+					secondsInput?.focus();
 				}
 			}
+		}
+	}
+
+	function handleKeyDown(e: KeyboardEvent) {
+		if (e.key === 'Tab') {
+			const input = e.target as HTMLInputElement;
+			if (input) {
+				if (e.shiftKey) {
+					// Focus previous input
+					const prevInput = input.previousElementSibling?.querySelector('input') as HTMLInputElement;
+					prevInput?.focus();
+				} else {
+					// Focus next input
+					const nextInput = input.nextElementSibling?.querySelector('input') as HTMLInputElement;
+					nextInput?.focus();
+				}
+			}
+			e.preventDefault();
 		}
 	}
 </script>
@@ -145,7 +167,11 @@
 	/>
 </div>
 
-<style>
+<style lang="postcss">
+	div :global(input) {
+		appearance: none;
+		-webkit-appearance: none;
+	}
 	div :global(input::-webkit-outer-spin-button) {
 		-webkit-appearance: none;
 		margin: 0;

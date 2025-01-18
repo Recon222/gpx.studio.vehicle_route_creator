@@ -24,16 +24,16 @@
 	/>
 </div>
 
-<style lang="postcss">
+<style>
 	div :global(input) {
-		@apply px-0.5;
-		@apply text-right;
-		@apply border-none;
-		@apply focus:ring-0;
-		@apply focus:ring-offset-0;
-		@apply focus:outline-none;
-		@apply focus-visible:ring-0;
-		@apply focus-visible:ring-offset-0;
-		@apply focus-visible:outline-none;
+		padding: 0 0.125rem;
+		text-align: right;
+		border: none;
+	}
+	div :global(input:focus) {
+		outline: none;
+		--tw-ring-offset-width: 0px;
+		--tw-ring-offset-color: transparent;
+		--tw-ring-color: transparent;
 	}
 </style> 
