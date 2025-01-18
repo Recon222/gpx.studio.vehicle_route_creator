@@ -1,6 +1,6 @@
 <script lang="ts">
     import { format } from 'date-fns';
-    import { CalendarDate, type DateValue, getLocalTimeZone } from '@internationalized/date';
+    import { CalendarDate, type DateValue } from '@internationalized/date';
     import { locale } from 'svelte-i18n';
     import { get } from 'svelte/store';
     import AnchorDatePicker from './AnchorDatePicker.svelte';
@@ -21,7 +21,6 @@
     let dateValue: DateValue | undefined = undefined;
     let timeValue: number | undefined = undefined;
     let isOpen = false;
-    let isInitialized = false;
 
     onMount(() => {
         console.log('[DEBUG] TimestampPicker mounted with props:', {
@@ -30,98 +29,53 @@
             anchor,
             isOpen
         });
-        if (timestamp) {
-            initializeFromTimestamp(timestamp);
-        }
+        // Automatically open the picker when mounted
         isOpen = true;
     });
 
-    function initializeFromTimestamp(ts: Date) {
-        console.log('[DEBUG] Initializing from timestamp:', ts);
-        
+    // Convert timestamp to date and time values
+    $: if (timestamp) {
+        console.log('[DEBUG] Timestamp changed:', timestamp);
         dateValue = new CalendarDate(
-            ts.getFullYear(),
-            ts.getMonth() + 1,
-            ts.getDate()
+            timestamp.getFullYear(),
+            timestamp.getMonth() + 1,
+            timestamp.getDate()
         );
-        
         timeValue = 
-            ts.getHours() * 3600 + 
-            ts.getMinutes() * 60 + 
-            ts.getSeconds();
-            
-        console.log('[DEBUG] Initialized values:', { dateValue, timeValue });
-        isInitialized = true;
+            timestamp.getHours() * 3600 + 
+            timestamp.getMinutes() * 60 + 
+            timestamp.getSeconds();
+        console.log('[DEBUG] Converted to:', { dateValue, timeValue });
     }
 
-    function handleTimeChange(newValue: number) {
-        console.log('[DEBUG] Time changed to:', newValue);
-        timeValue = newValue;
-        updateTimestampFromValues();
-    }
-
-    function handleDateChange(newValue: DateValue | undefined) {
-        if (!newValue) return;
-        console.log('[DEBUG] Date changed to:', newValue);
-        dateValue = newValue;
-        updateTimestampFromValues();
-    }
-
-    function updateTimestampFromValues() {
-        if (!dateValue || timeValue === undefined) return;
-        
-        console.log('[DEBUG] Updating timestamp from values:', { dateValue, timeValue });
-        
-        try {
-            const localDate = dateValue.toDate(getLocalTimeZone());
-            const hours = Math.floor(timeValue / 3600);
-            const minutes = Math.floor((timeValue % 3600) / 60);
-            const seconds = timeValue % 60;
-            
-            const newTimestamp = new Date(
-                localDate.getFullYear(),
-                localDate.getMonth(),
-                localDate.getDate(),
-                hours,
-                minutes,
-                seconds
-            );
-            
-            console.log('[DEBUG] Setting new timestamp:', newTimestamp);
-            timestamp = newTimestamp;
-        } catch (error) {
-            console.error('[DEBUG] Error updating timestamp:', error);
-        }
+    $: {
+        console.log('[DEBUG] Popover open state changed:', isOpen);
     }
 
     function handleSave() {
         console.log('[DEBUG] handleSave called with:', { dateValue, timeValue, notes });
         if (!dateValue || timeValue === undefined) {
-            console.warn('[DEBUG] Missing required date/time values for save');
+            console.warn('[DEBUG] Missing required values for save');
             return;
         }
 
-        try {
-            const localDate = dateValue.toDate(getLocalTimeZone());
-            const hours = Math.floor(timeValue / 3600);
-            const minutes = Math.floor((timeValue % 3600) / 60);
-            const seconds = timeValue % 60;
-            
-            const finalTimestamp = new Date(
-                localDate.getFullYear(),
-                localDate.getMonth(),
-                localDate.getDate(),
-                hours,
-                minutes,
-                seconds
-            );
+        const date = dateValue.toDate(get(locale) ?? 'en');
+        const hours = Math.floor(timeValue / 3600);
+        const minutes = Math.floor((timeValue % 3600) / 60);
+        const seconds = timeValue % 60;
 
-            console.log('[DEBUG] Saving with final timestamp:', finalTimestamp);
-            onSave({ timestamp: finalTimestamp, notes });
-            isOpen = false;
-        } catch (error) {
-            console.error('[DEBUG] Error saving timestamp:', error);
-        }
+        const finalTimestamp = new Date(
+            date.getFullYear(),
+            date.getMonth(),
+            date.getDate(),
+            hours,
+            minutes,
+            seconds
+        );
+
+        console.log('[DEBUG] Saving with final timestamp:', finalTimestamp);
+        onSave({ timestamp: finalTimestamp, notes });
+        isOpen = false;
     }
 
     function handleCancel() {
@@ -161,12 +115,10 @@
                         locale={get(locale) ?? 'en'}
                         placeholder="Select date"
                         class="w-full"
-                        onValueChange={handleDateChange}
                     />
                     <AnchorTimePicker
                         bind:value={timeValue}
                         showHours={true}
-                        onChange={handleTimeChange}
                     />
                 </div>
             </div>
@@ -190,4 +142,4 @@
             </div>
         </div>
     </Popover.Content>
-</Popover.Root>
+</Popover.Root> 

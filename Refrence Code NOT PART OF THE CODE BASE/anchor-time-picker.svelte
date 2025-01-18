@@ -9,101 +9,80 @@
 	let hours: string | number = '--';
 	let minutes: string | number = '--';
 	let seconds: string | number = '--';
-	let isUserInput = false;
 
-	function maybeParseInt(value: string | number): number | undefined {
+	function maybeParseInt(value: string | number): number {
 		if (value === '--' || value === '') {
-			return undefined;
+			return 0;
 		}
-		const parsed = typeof value === 'string' ? parseInt(value) : value;
-		return isNaN(parsed) ? undefined : parsed;
+		return typeof value === 'string' ? parseInt(value) : value;
 	}
 
-	function computeValue(): number | undefined {
-		const h = maybeParseInt(hours);
-		const m = maybeParseInt(minutes);
-		const s = maybeParseInt(seconds);
-
-		if (h === undefined && m === undefined && s === undefined) {
-			return undefined;
-		}
-
-		// Only return a value if all components are set
-		if (h === undefined || m === undefined || s === undefined) {
-			return undefined;
-		}
-
-		return h * 3600 + m * 60 + s;
+	function computeValue(): number {
+		return Math.max(
+			maybeParseInt(hours) * 3600 + maybeParseInt(minutes) * 60 + maybeParseInt(seconds),
+			1
+		);
 	}
 
-	function handleTimeInputChange(component: 'hours' | 'minutes' | 'seconds', event: Event) {
-		isUserInput = true;
-		const target = event.target as HTMLInputElement;
-        if (!target) return;
-        
-        const newValue = target.value.trim();
-        
-        // Allow empty input to reset to placeholder
-        if (newValue === '') {
-            switch (component) {
-                case 'hours':
-                    hours = '--';
-                    break;
-                case 'minutes':
-                    minutes = '--';
-                    break;
-                case 'seconds':
-                    seconds = '--';
-                    break;
-            }
-            return;
+	function updateValue() {
+        const newValue = computeValue();
+        if (newValue !== value) {
+            console.log('[DEBUG] Time value updated:', { hours, minutes, seconds, newValue });
+            value = newValue;
+            onChange(newValue);
         }
+	}
 
-        let parsed = parseInt(newValue);
-        if (isNaN(parsed)) {
-            return;
-        }
+	$: hours, minutes, seconds, updateValue();
 
-        console.log(`[DEBUG] ${component} input changed to:`, parsed);
-
-        switch (component) {
-            case 'hours':
-                if (parsed < 0) parsed = 0;
-                if (parsed > 23) parsed = 23;
-                hours = parsed;
-                break;
-            case 'minutes':
-                if (parsed < 0) parsed = 0;
-                if (parsed > 59) parsed = 59;
-                minutes = parsed;
-                break;
-            case 'seconds':
-                if (parsed < 0) parsed = 0;
-                if (parsed > 59) parsed = 59;
-                seconds = parsed;
-                break;
-        }
-        
-        // Only compute and update value if all fields are filled
-		const computed = computeValue();
-		if (computed !== undefined) {
-			value = computed;
-			onChange(computed);
+	$: if (value === undefined) {
+		hours = '--';
+		minutes = '--';
+		seconds = '--';
+	} else if (value !== computeValue()) {
+		let rounded = Math.max(Math.round(value), 1);
+		if (showHours) {
+			hours = Math.floor(rounded / 3600);
+			minutes = Math.floor((rounded % 3600) / 60)
+				.toString()
+				.padStart(2, '0');
 		} else {
-			value = undefined;
+			minutes = Math.floor(rounded / 60).toString();
 		}
-		
-		isUserInput = false;
-    }
-
-	$: if (!isUserInput && value !== undefined) {
-		hours = Math.floor(value / 3600);
-		minutes = Math.floor((value % 3600) / 60);
-		seconds = value % 60;
+		seconds = (rounded % 60).toString().padStart(2, '0');
+        console.log('[DEBUG] Time components updated from value:', { hours, minutes, seconds });
 	}
 
 	let container: HTMLDivElement;
 	let countKeyPress = 0;
+
+	function handleTimeInputChange(component: 'hours' | 'minutes' | 'seconds', inputValue: string | number) {
+        console.log(`[DEBUG] ${component} changed to:`, inputValue);
+        let parsed = typeof inputValue === 'string' ? parseInt(inputValue) : inputValue;
+        
+        if (isNaN(parsed)) {
+            parsed = 0;
+        }
+
+        switch (component) {
+            case 'hours':
+                if (parsed < 0) parsed = 0;
+                hours = parsed;
+                break;
+            case 'minutes':
+                if (parsed < 0) parsed = 0;
+                if (showHours && parsed > 59) parsed = 59;
+                minutes = parsed.toString().padStart(showHours ? 2 : 1, '0');
+                break;
+            case 'seconds':
+                if (parsed < 0) parsed = 0;
+                if (parsed > 59) parsed = 59;
+                seconds = parsed.toString().padStart(2, '0');
+                break;
+        }
+        
+        updateValue();
+    }
 
 	function onKeyPress(e: KeyboardEvent) {
 		if (['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(e.key)) {
@@ -134,7 +113,7 @@
 			bind:value={hours}
 			{disabled}
 			class="w-[30px]"
-			on:input={(e) => handleTimeInputChange('hours', e)}
+			on:input={(e) => handleTimeInputChange('hours', e.target.value)}
 			on:keypress={onKeyPress}
 			on:focusin={() => {
 				countKeyPress = 0;
@@ -146,7 +125,7 @@
 		id="minutes"
 		bind:value={minutes}
 		{disabled}
-		on:input={(e) => handleTimeInputChange('minutes', e)}
+		on:input={(e) => handleTimeInputChange('minutes', e.target.value)}
 		on:keypress={onKeyPress}
 		on:focusin={() => {
 			countKeyPress = 0;
@@ -157,7 +136,7 @@
 		id="seconds"
 		bind:value={seconds}
 		{disabled}
-		on:input={(e) => handleTimeInputChange('seconds', e)}
+		on:input={(e) => handleTimeInputChange('seconds', e.target.value)}
 		on:keypress={onKeyPress}
 		on:focusin={() => {
 			countKeyPress = 0;
