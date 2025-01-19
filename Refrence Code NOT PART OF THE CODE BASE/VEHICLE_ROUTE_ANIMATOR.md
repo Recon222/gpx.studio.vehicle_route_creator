@@ -9,10 +9,9 @@ A refactor of GPX Studio to create a specialized vehicle route animation system.
   - ✅ Interactive point placement and dragging
   - ✅ Segment insertion between points
   - ✅ Context menu for point deletion
-- 🔄 Assign precise timestamps to individual anchor points
+- ✅ Assign precise timestamps to individual anchor points
   - ✅ Optional notes field per anchor point
-  - 🔄 Per-anchor timestamp picker on point placement
-  - 🔄 Toggle between global timing and per-anchor timing modes
+  - ✅ Per-anchor timestamp picker on point placement
   - ✅ Keyboard entry support for timestamps
 - ✅ Animate vehicles along routes with precise timing control
   - ✅ Smooth interpolation between points
@@ -50,14 +49,13 @@ A refactor of GPX Studio to create a specialized vehicle route animation system.
   - ✅ Binary search for closest points
   - ✅ Linear position interpolation
   - ✅ Heading calculation
-- 🔄 Route point timestamp management
+- ✅ Route point timestamp management
   - ✅ Global time tracking
-  - 🔄 Per-point timing system
 - ✅ Playback state management
   - ✅ Centralized animation store
   - ✅ Reactive state updates
   - ✅ Time range management
-- 🔄 Anchor point timestamp assignment
+- ✅ Anchor point timestamp assignment
 
 ### Phase 2: Playback Controls Implementation
 #### Components
@@ -79,7 +77,7 @@ A refactor of GPX Studio to create a specialized vehicle route animation system.
 
 3. Route Management
    - ✅ Route creation/editing
-   - 🔄 Individual anchor timestamp assignment
+   - ✅ Individual anchor timestamp assignment
    - 🔄 Route styling
    - 🔄 Segment speed visualization
 
@@ -123,15 +121,15 @@ A refactor of GPX Studio to create a specialized vehicle route animation system.
    - ✅ Capture user anchor points
    - ✅ Road network snapping
    - ✅ Route calculation
-   - 🔄 Timestamp assignment UI
-   - 🔄 Observation metadata
+   - ✅ Timestamp assignment UI
+   - ✅ Observation metadata
 
 2. Timestamp Assignment
-   - 🔄 Immediate timestamp prompt on anchor placement
+   - ✅ Immediate timestamp prompt on anchor placement
    - ✅ Optional notes field per anchor
-   - 🔄 Toggle between timing modes
-   - 🔄 Time validation and conflict resolution
-   - 🔄 Partial timing support
+   - ✅ Toggle between timing modes
+   - ✅ Time validation and conflict resolution
+   - ✅ Partial timing support
 
 3. Interpolation ✅
    - ✅ Position interpolation
@@ -142,7 +140,7 @@ A refactor of GPX Studio to create a specialized vehicle route animation system.
 
 ### GPX Integration
 - ✅ Maintain GPX format compatibility
-- 🔄 Store per-anchor timestamps in GPX
+- 🔄 Store per-anchor timestamps in GPX (not sure if this has been done)
 - ✅ Store anchor notes in GPX metadata
 - 🔄 Support for multiple track animations
 - 🔄 Time synchronization data in GPX
@@ -192,7 +190,7 @@ A refactor of GPX Studio to create a specialized vehicle route animation system.
 3. ✅ Create basic playback system
 4. ✅ Convert route management
 5. ✅ Integrate new data panel
-6. 🔄 Implement anchor timestamp UI
+6. ✅ Implement anchor timestamp UI
 
 ### Phase 2 Priorities
 1. ✅ Timeline UI components
@@ -212,7 +210,7 @@ A refactor of GPX Studio to create a specialized vehicle route animation system.
 - ✅ Optimal state updates
 - ✅ Memory management for long routes
 
-## Testing Strategy
+## Testing Strategy (Real-world testing for the animation system first)
 - 🔄 Component unit tests
 - 🔄 Animation timing tests
 - ✅ Route calculation validation

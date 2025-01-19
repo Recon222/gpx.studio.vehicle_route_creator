@@ -813,73 +813,38 @@ export class RoutingControls {
             }
         }
 
+        // Calculate speed between anchor points if we have timestamps
         let speed: number | undefined = undefined;
-        let startTime = firstPoint?.time;
-
-        if (!useAnchorTimestamps) {
-            // Use original speed-based timing logic
-            let stats = fileWithStats.statistics.getStatisticsFor(
-                new ListTrackSegmentItem(this.fileId, anchors[0].trackIndex, anchors[0].segmentIndex)
-            );
-
-            if (stats.global.speed.moving > 0) {
-                let replacingDistance = 0;
-                for (let i = 1; i < response.length; i++) {
-                    replacingDistance += distance(response[i - 1].getCoordinates(), response[i].getCoordinates()) / 1000;
-                }
-
-                const startIndex = firstPoint?._data?.index;
-                const endIndex = lastPoint?._data?.index;
-                
-                if (typeof startIndex === 'number' && 
-                    typeof endIndex === 'number' && 
-                    stats.local.distance.moving[startIndex] !== undefined && 
-                    stats.local.distance.moving[endIndex] !== undefined &&
-                    stats.local.time.moving[startIndex] !== undefined &&
-                    stats.local.time.moving[endIndex] !== undefined &&
-                    stats.local.time.total[startIndex] !== undefined &&
-                    stats.local.time.total[endIndex] !== undefined) {
-                    
-                    let replacedDistance = stats.local.distance.moving[endIndex] - 
-                                         stats.local.distance.moving[startIndex];
-
-                    let newDistance = stats.global.distance.moving + replacingDistance - replacedDistance;
-                    let newTime = newDistance / stats.global.speed.moving * 3600;
-
-                    let remainingTime = stats.global.time.moving - 
-                                      (stats.local.time.moving[endIndex] - 
-                                       stats.local.time.moving[startIndex]);
-                    let replacingTime = newTime - remainingTime;
-
-                    if (replacingTime <= 0) {
-                        replacingTime = stats.local.time.total[endIndex] - 
-                                      stats.local.time.total[startIndex];
-                    }
-
-                    speed = replacingDistance / replacingTime * 3600;
-
-                    if (startTime === undefined && segment.trkpt[endIndex]?.time) {
-                        const endTime = segment.trkpt[endIndex].time.getTime();
-                        startTime = new Date(endTime - 
-                                       (replacingTime + stats.local.time.total[endIndex] - 
-                                        stats.local.time.moving[endIndex]) * 1000);
-                    }
-                }
+        if (useAnchorTimestamps && firstPoint && lastPoint && firstPoint.time && lastPoint.time) {
+            const totalDistance = targetCoordinates.reduce((acc, curr, i) => {
+                if (i === 0) return 0;
+                return acc + distance(targetCoordinates[i-1], curr) / 1000; // Convert to km
+            }, 0);
+            
+            const totalTime = (lastPoint.time.getTime() - firstPoint.time.getTime()) / (1000 * 3600); // Convert to hours
+            if (totalTime > 0) {
+                speed = totalDistance / totalTime; // km/h
             }
         }
 
-        // Apply the changes to the file
-        dbUtils.applyToFile(this.fileId, (file) => 
+        // Remove timestamps from dense points, they'll be interpolated during animation
+        response.forEach(point => {
+            if (!point._data?.anchor) {
+                point.time = undefined;
+            }
+        });
+
+        // Apply the route
+        dbUtils.applyToFile(this.fileId, (file) => {
             file.replaceTrackPoints(
                 anchors[0].trackIndex,
                 anchors[0].segmentIndex,
-                firstPoint?._data?.index ?? 0,
-                lastPoint?._data?.index ?? 0,
+                anchors[0].point._data.index,
+                anchors[anchors.length - 1].point._data.index,
                 response,
-                useAnchorTimestamps ? undefined : speed,
-                useAnchorTimestamps ? undefined : startTime
-            )
-        );
+                speed // Pass calculated speed to replaceTrackPoints
+            );
+        });
 
         return true;
     }

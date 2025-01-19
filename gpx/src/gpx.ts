@@ -1585,9 +1585,11 @@ function withTimestamps(points: TrackPoint[], speed: number, lastPoint: TrackPoi
     }
     return points.map((point) => {
         let time = getTimestamp(last, point, speed);
-        last = point.clone();
-        last.time = time;
-        return last;
+        let pt = point.clone();
+        // Only keep timestamps on anchor points
+        pt.time = pt._data?.anchor ? time : undefined;
+        last = pt;
+        return pt;
     });
 }
 
@@ -1596,10 +1598,14 @@ function withShiftedAndCompressedTimestamps(points: TrackPoint[], speed: number,
     let last = points[0];
     return points.map((point) => {
         let pt = point.clone();
-        if (point.time === undefined) {
-            pt.time = getTimestamp(last, point, speed);
+        if (pt._data?.anchor) {
+            if (point.time === undefined) {
+                pt.time = getTimestamp(last, point, speed);
+            } else {
+                pt.time = new Date(start.getTime() + ratio * (point.time.getTime() - points[0].time.getTime()));
+            }
         } else {
-            pt.time = new Date(start.getTime() + ratio * (point.time.getTime() - points[0].time.getTime()));
+            pt.time = undefined;
         }
         last = pt;
         return pt;
@@ -1620,10 +1626,14 @@ function withArtificialTimestamps(points: TrackPoint[], totalTime: number, lastP
     let last = lastPoint;
     return points.map((point, i) => {
         let pt = point.clone();
-        if (i === 0) {
-            pt.time = lastPoint?.time ?? startTime;
+        if (pt._data?.anchor) {
+            if (i === 0) {
+                pt.time = lastPoint?.time ?? startTime;
+            } else {
+                pt.time = new Date(last.time.getTime() + totalTime * 1000 * weight[i - 1] / totalWeight);
+            }
         } else {
-            pt.time = new Date(last.time.getTime() + totalTime * 1000 * weight[i - 1] / totalWeight);
+            pt.time = undefined;
         }
         last = pt;
         return pt;
