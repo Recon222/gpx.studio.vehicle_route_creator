@@ -12,7 +12,7 @@ export interface AnchorTiming {
     coordinates: Coordinates;
 }
 
-interface AnchorTimingState {
+export interface AnchorTimingState {
     timings: Map<string, AnchorTiming>;
     activeAnchorId: string | null;
 }
